@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
-import { userDataContext } from '../context/userContext'
+import { userDataContext } from '../context/UserContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import aiImg from "../assets/ai.gif"
@@ -17,6 +17,7 @@ function Home() {
   const [ham,setHam]=useState(false)
   const isRecognizingRef=useRef(false)
   const synth=window.speechSynthesis
+  const voicesRef = useRef([])
 
   const handleLogOut=async ()=>{
     try {
@@ -44,55 +45,169 @@ function Home() {
     
   }
 
-  const speak=(text)=>{
-    const utterence=new SpeechSynthesisUtterance(text)
-    utterence.lang = 'hi-IN';
-    const voices =window.speechSynthesis.getVoices()
-    const hindiVoice = voices.find(v => v.lang === 'hi-IN');
-    if (hindiVoice) {
-      utterence.voice = hindiVoice;
+  // Load available voices into ref (voices may load asynchronously)
+  useEffect(() => {
+    const loadVoices = () => {
+      try {
+        voicesRef.current = synth.getVoices() || []
+      } catch (e) {
+        voicesRef.current = []
+      }
+    }
+    loadVoices()
+    const onVoicesChanged = () => loadVoices()
+    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged)
+    return () => window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged)
+  }, [])
+
+  const speak = async (text) => {
+    console.log('speak() called with text:', text)
+
+    // Cancel any existing speech
+    if (synth.speaking) {
+      console.log('Cancelling existing speech')
+      synth.cancel()
     }
 
-
-    isSpeakingRef.current=true
-    utterence.onend=()=>{
-        setAiText("");
-  isSpeakingRef.current = false;
-  setTimeout(() => {
-    startRecognition(); // ⏳ Delay se race condition avoid hoti hai
-  }, 800);
+    // If voices are not yet loaded, wait briefly for voiceschanged
+    if (!voicesRef.current || voicesRef.current.length === 0) {
+      await new Promise((resolve) => {
+        const handler = () => {
+          voicesRef.current = synth.getVoices() || []
+          resolve()
+        }
+        window.speechSynthesis.addEventListener('voiceschanged', handler)
+        // fallback timeout
+        setTimeout(() => {
+          window.speechSynthesis.removeEventListener('voiceschanged', handler)
+          voicesRef.current = synth.getVoices() || []
+          resolve()
+        }, 500)
+      })
     }
-   synth.cancel(); // 🛑 pehle se koi speech ho to band karo
-synth.speak(utterence);
+
+    const utterence = new SpeechSynthesisUtterance(text)
+
+    // detect Hindi by Devanagari or common Hindi words (handles Hinglish)
+    const isHindi = /[\u0900-\u097F]/.test(text) || /\b(kya|tum|aap|kaise|kaisa|baje|namaste|shukriya|dhanyavaad)\b/i.test(text)
+    utterence.lang = isHindi ? 'hi-IN' : 'en-US'
+
+    // Choose voice from loaded list
+    const voices = voicesRef.current || []
+    if (isHindi) {
+      const hindiVoice = voices.find(v => v.lang && v.lang.startsWith('hi'))
+      if (hindiVoice) utterence.voice = hindiVoice
+    } else {
+      const englishVoice = voices.find(v => v.lang && v.lang.startsWith('en'))
+      if (englishVoice) utterence.voice = englishVoice
+    }
+
+    utterence.rate = 0.95
+    utterence.pitch = 1
+    utterence.volume = 1
+
+    isSpeakingRef.current = true
+
+    utterence.onstart = () => console.log('Speech started')
+    utterence.onend = () => {
+      console.log('Speech ended')
+      isSpeakingRef.current = false
+      setAiText("")
+      setTimeout(() => startRecognition(), 600)
+    }
+    utterence.onerror = (e) => {
+      console.error('Speech error', e)
+      isSpeakingRef.current = false
+      // Resume recognition even on error
+      setTimeout(() => startRecognition(), 600)
+    }
+
+    console.log('About to speak:', text)
+    synth.speak(utterence)
   }
 
   const handleCommand=(data)=>{
     const {type,userInput,response}=data
-      speak(response);
     
+    console.log('handleCommand called with:', {type, userInput, response});
+    
+    // Set AI text immediately so user sees it
+    if (response) {
+      setAiText(response)
+    }
+    
+    // Always attempt to speak the response from backend
+    if (response) {
+      console.log('Calling speak() with response:', response);
+      speak(response);
+    } else {
+      console.warn('No response to speak');
+      isSpeakingRef.current = false;
+      setTimeout(() => startRecognition(), 600)
+    }
+    
+    // Handle specific command types that open URLs/apps
     if (type === 'google-search') {
       const query = encodeURIComponent(userInput);
       window.open(`https://www.google.com/search?q=${query}`, '_blank');
     }
-     if (type === 'calculator-open') {
-  
+    if (type === 'calculator-open') {
       window.open(`https://www.google.com/search?q=calculator`, '_blank');
     }
-     if (type === "instagram-open") {
+    if (type === "instagram-open") {
       window.open(`https://www.instagram.com/`, '_blank');
     }
-    if (type ==="facebook-open") {
+    if (type === "facebook-open") {
       window.open(`https://www.facebook.com/`, '_blank');
     }
-     if (type ==="weather-show") {
+    if (type === "weather-show") {
       window.open(`https://www.google.com/search?q=weather`, '_blank');
     }
-
-    if (type === 'youtube-search' || type === 'youtube-play') {
-      const query = encodeURIComponent(userInput);
-      window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
+    if (type === "github-open") {
+      window.open(`https://github.com/dhirandra7`, '_blank');
     }
 
+    if (type === "linkedin-open") {
+      window.open(`https://www.linkedin.com/in/dhirandra7/`, '_blank');
+    }
+
+    if (type === "chatgpt-open") {
+      window.open('https://chat.openai.com/', '_blank');
+    }
+
+    if (type === 'open-multiple') {
+      // userInput expected to be comma-separated list like "chatgpt, github, linkedin"
+      const items = (userInput || '').split(',').map(s => s.trim().toLowerCase());
+      items.forEach(item => {
+        if (!item) return;
+        if (item.includes('chatgpt') || item.includes('chat gpt')) {
+          window.open('https://chat.openai.com/', '_blank');
+        } else if (item.includes('github')) {
+          window.open('https://github.com/dhirandra7', '_blank');
+        } else if (item.includes('linkedin') || item.includes('linked in')) {
+          window.open('https://www.linkedin.com/in/dhirandra7/', '_blank');
+        } else if (item.includes('youtube')) {
+          window.open('https://www.youtube.com/', '_blank');
+        } else if (item.includes('google')) {
+          window.open('https://www.google.com/', '_blank');
+        } else if (item.includes('instagram') || item.includes('insta')) {
+          window.open('https://www.instagram.com/', '_blank');
+        } else if (item.includes('facebook')) {
+          window.open('https://www.facebook.com/', '_blank');
+        } else {
+          // default to google search for unknown item
+          window.open(`https://www.google.com/search?q=${encodeURIComponent(item)}`, '_blank');
+        }
+      });
+    }
+    if (type === 'youtube-search' || type === 'youtube-play' || type === 'youtube-open') {
+      const query = encodeURIComponent(userInput || '');
+      if (userInput && userInput.trim()) {
+        window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
+      } else {
+        window.open('https://www.youtube.com/', '_blank');
+      }
+    }
   }
 
 useEffect(() => {
@@ -105,7 +220,7 @@ useEffect(() => {
 
   recognitionRef.current = recognition;
 
-  let isMounted = true;  // flag to avoid setState on unmounted component
+  let isMounted = true;  
 
   // Start recognition after 1 second delay only if component still mounted
   const startTimeout = setTimeout(() => {
@@ -144,10 +259,18 @@ useEffect(() => {
   };
 
   recognition.onerror = (event) => {
+    // If recognition was aborted intentionally (we call abort() before speaking),
+    // suppress the noisy 'aborted' error — just clear flags and don't restart here.
+    if (event.error === 'aborted') {
+      isRecognizingRef.current = false;
+      setListening(false);
+      return;
+    }
+
     console.warn("Recognition error:", event.error);
     isRecognizingRef.current = false;
     setListening(false);
-    if (event.error !== "aborted" && isMounted && !isSpeakingRef.current) {
+    if (isMounted && !isSpeakingRef.current) {
       setTimeout(() => {
         if (isMounted) {
           try {
@@ -161,6 +284,9 @@ useEffect(() => {
     }
   };
 
+  // NOTE: removed duplicate handleCommand here so the top-level
+  // `handleCommand` (which calls `speak(response)`) is used everywhere.
+
   recognition.onresult = async (e) => {
     const transcript = e.results[e.results.length - 1][0].transcript.trim();
     if (transcript.toLowerCase().includes(userData.assistantName.toLowerCase())) {
@@ -169,10 +295,20 @@ useEffect(() => {
       recognition.stop();
       isRecognizingRef.current = false;
       setListening(false);
-      const data = await getGeminiResponse(transcript);
-      handleCommand(data);
-      setAiText(data.response);
-      setUserText("");
+      try {
+        console.log('Sending command to backend:', transcript);
+        const data = await getGeminiResponse(transcript);
+        console.log('Backend response:', data);
+        handleCommand(data);
+        // Remove duplicate setAiText here - handleCommand already sets it
+        setUserText("");
+      } catch (error) {
+        console.error('Error getting response:', error);
+        setAiText('Sorry, I encountered an error. Please check the console for details.');
+        isSpeakingRef.current = false;
+        setUserText("");
+        setTimeout(() => startRecognition(), 600);
+      }
     }
   };
 
@@ -196,7 +332,7 @@ useEffect(() => {
 
 
   return (
-    <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px]'>
+    <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
       <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(true)}/>
       <div className={`absolute lg:hidden top-0 w-full h-full bg-[#00000053] backdrop-blur-lg p-[20px] flex flex-col gap-[20px] items-start ${ham?"translate-x-0":"translate-x-full"} transition-transform`}>
  <RxCross1 className=' text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(false)}/>

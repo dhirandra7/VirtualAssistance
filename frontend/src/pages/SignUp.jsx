@@ -3,7 +3,7 @@ import bg from "../assets/authBg.png"
 import { IoEye } from "react-icons/io5";
 import { IoEyeOff } from "react-icons/io5";
 import { useNavigate } from 'react-router-dom';
-import { userDataContext } from '../context/userContext';
+import { userDataContext } from '../context/UserContext';
 import axios from "axios"
 function SignUp() {
   const [showPassword,setShowPassword]=useState(false)
@@ -14,7 +14,7 @@ function SignUp() {
     const [loading,setLoading]=useState(false)
     const [password,setPassword]=useState("")
 const [err,setErr]=useState("")
-  const handleSignUp=async (e)=>{
+    const handleSignUp=async (e)=>{
     e.preventDefault()
     setErr("")
     setLoading(true)
@@ -29,7 +29,11 @@ try {
   console.log(error)
   setUserData(null)
   setLoading(false)
-  setErr(error.response.data.message)
+        if (error.response && error.response.data && error.response.data.message) {
+          setErr(error.response.data.message)
+        } else {
+          setErr("Signup failed. Please try again later.")
+        }
 }
     }
   return (
