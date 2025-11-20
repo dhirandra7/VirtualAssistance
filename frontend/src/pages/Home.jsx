@@ -6,6 +6,7 @@ import aiImg from "../assets/ai.gif"
 import { CgMenuRight } from "react-icons/cg";
 import { RxCross1 } from "react-icons/rx";
 import userImg from "../assets/user.gif"
+
 function Home() {
   const {userData,serverUrl,setUserData,getGeminiResponse}=useContext(userDataContext)
   const navigate=useNavigate()
