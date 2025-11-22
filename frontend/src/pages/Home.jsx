@@ -7,70 +7,74 @@ import { CgMenuRight } from "react-icons/cg";
 import { RxCross1 } from "react-icons/rx";
 import userImg from "../assets/user.gif"
 
-function Home() {
-  const {userData,serverUrl,setUserData,getGeminiResponse}=useContext(userDataContext)
-  const navigate=useNavigate()
-  const [listening,setListening]=useState(false)
-  const [userText,setUserText]=useState("")
-  const [aiText,setAiText]=useState("")
-  const isSpeakingRef=useRef(false)
-  const recognitionRef=useRef(null)
-  const [ham,setHam]=useState(false)
-  const isRecognizingRef=useRef(false)
-  const synth=window.speechSynthesis
+export default function Home() {
+  const { userData, serverUrl, setUserData, getGeminiResponse } = useContext(userDataContext)
+  const navigate = useNavigate()
+
+  const [listening, setListening] = useState(false)
+  const [userText, setUserText] = useState("")
+  const [aiText, setAiText] = useState("")
+  const isSpeakingRef = useRef(false)
+  const recognitionRef = useRef(null)
+  const [ham, setHam] = useState(false)
+  const isRecognizingRef = useRef(false)
+  const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
   const voicesRef = useRef([])
 
-  const handleLogOut=async ()=>{
+  // Safe fallback assistant name
+  const assistantName = (userData && userData.assistantName) ? userData.assistantName.toLowerCase() : 'alexa'
+
+  // Logout
+  const handleLogOut = async () => {
     try {
-      const result=await axios.get(`${serverUrl}/api/auth/logout`,{withCredentials:true})
+      await axios.get(`${serverUrl}/api/auth/logout`, { withCredentials: true })
       setUserData(null)
-      navigate("/signin")
+      navigate('/signin')
     } catch (error) {
+      console.error('Logout error', error)
       setUserData(null)
-      console.log(error)
+      navigate('/signin')
     }
   }
 
+  // Start recognition safely
   const startRecognition = () => {
-    
-   if (!isSpeakingRef.current && !isRecognizingRef.current) {
-    try {
-      recognitionRef.current?.start();
-      console.log("Recognition requested to start");
-    } catch (error) {
-      if (error.name !== "InvalidStateError") {
-        console.error("Start error:", error);
+    const r = recognitionRef.current
+    if (!r) return
+    if (!isSpeakingRef.current && !isRecognizingRef.current) {
+      try {
+        r.start()
+        console.log('Recognition requested to start')
+      } catch (e) {
+        if (e.name !== 'InvalidStateError') console.error('Start error:', e)
       }
     }
   }
-    
-  }
 
-  // Load available voices into ref (voices may load asynchronously)
+  // Load voices
   useEffect(() => {
     const loadVoices = () => {
       try {
-        voicesRef.current = synth.getVoices() || []
+        voicesRef.current = (synth && synth.getVoices()) || []
       } catch (e) {
         voicesRef.current = []
       }
     }
     loadVoices()
-    const onVoicesChanged = () => loadVoices()
-    window.speechSynthesis.addEventListener('voiceschanged', onVoicesChanged)
-    return () => window.speechSynthesis.removeEventListener('voiceschanged', onVoicesChanged)
-  }, [])
-
-  const speak = async (text) => {
-    console.log('speak() called with text:', text)
-
-    // Cancel any existing speech
-    if (synth.speaking) {
-      console.log('Cancelling existing speech')
-      synth.cancel()
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const handler = () => loadVoices()
+      window.speechSynthesis.addEventListener('voiceschanged', handler)
+      return () => window.speechSynthesis.removeEventListener('voiceschanged', handler)
     }
+  }, [synth])
 
-    // If voices are not yet loaded, wait briefly for voiceschanged
+  // Speak helper
+  const speak = async (text) => {
+    if (!synth) return
+    // Cancel any existing speech
+    if (synth.speaking) synth.cancel()
+
+    // Ensure voices loaded
     if (!voicesRef.current || voicesRef.current.length === 0) {
       await new Promise((resolve) => {
         const handler = () => {
@@ -78,7 +82,6 @@ function Home() {
           resolve()
         }
         window.speechSynthesis.addEventListener('voiceschanged', handler)
-        // fallback timeout
         setTimeout(() => {
           window.speechSynthesis.removeEventListener('voiceschanged', handler)
           voicesRef.current = synth.getVoices() || []
@@ -87,250 +90,202 @@ function Home() {
       })
     }
 
-    const utterence = new SpeechSynthesisUtterance(text)
-
-    // detect Hindi by Devanagari or common Hindi words (handles Hinglish)
+    const utter = new SpeechSynthesisUtterance(text)
     const isHindi = /[\u0900-\u097F]/.test(text) || /\b(kya|tum|aap|kaise|kaisa|baje|namaste|shukriya|dhanyavaad)\b/i.test(text)
-    utterence.lang = isHindi ? 'hi-IN' : 'en-US'
+    utter.lang = isHindi ? 'hi-IN' : 'en-US'
 
-    // Choose voice from loaded list
     const voices = voicesRef.current || []
     if (isHindi) {
-      const hindiVoice = voices.find(v => v.lang && v.lang.startsWith('hi'))
-      if (hindiVoice) utterence.voice = hindiVoice
+      const v = voices.find(vv => vv.lang && vv.lang.startsWith('hi'))
+      if (v) utter.voice = v
     } else {
-      const englishVoice = voices.find(v => v.lang && v.lang.startsWith('en'))
-      if (englishVoice) utterence.voice = englishVoice
+      const v = voices.find(vv => vv.lang && vv.lang.startsWith('en'))
+      if (v) utter.voice = v
     }
 
-    utterence.rate = 0.95
-    utterence.pitch = 1
-    utterence.volume = 1
+    utter.rate = 0.95
+    utter.pitch = 1
+    utter.volume = 1
 
     isSpeakingRef.current = true
 
-    utterence.onstart = () => console.log('Speech started')
-    utterence.onend = () => {
+    utter.onstart = () => console.log('Speech started')
+    utter.onend = () => {
       console.log('Speech ended')
       isSpeakingRef.current = false
       setAiText("")
-      setTimeout(() => startRecognition(), 600)
+      // Restart recognition after a short delay if component still mounted
+      setTimeout(() => {
+        try { startRecognition() } catch (e) { }
+      }, 600)
     }
-    utterence.onerror = (e) => {
+
+    utter.onerror = (e) => {
       console.error('Speech error', e)
       isSpeakingRef.current = false
-      // Resume recognition even on error
-      setTimeout(() => startRecognition(), 600)
+      setTimeout(() => { try { startRecognition() } catch (e) {} }, 600)
     }
 
-    console.log('About to speak:', text)
-    synth.speak(utterence)
+    synth.speak(utter)
   }
 
-  const handleCommand=(data)=>{
-    const {type,userInput,response}=data
-    
-    console.log('handleCommand called with:', {type, userInput, response});
-    
-    // Set AI text immediately so user sees it
-    if (response) {
-      setAiText(response)
-    }
-    
-    // Always attempt to speak the response from backend
-    if (response) {
-      console.log('Calling speak() with response:', response);
-      speak(response);
-    } else {
-      console.warn('No response to speak');
-      isSpeakingRef.current = false;
-      setTimeout(() => startRecognition(), 600)
-    }
-    
-    // Handle specific command types that open URLs/apps
-    if (type === 'google-search') {
-      const query = encodeURIComponent(userInput);
-      window.open(`https://www.google.com/search?q=${query}`, '_blank');
-    }
-    if (type === 'calculator-open') {
-      window.open(`https://www.google.com/search?q=calculator`, '_blank');
-    }
-    if (type === "instagram-open") {
-      window.open(`https://www.instagram.com/`, '_blank');
-    }
-    if (type === "facebook-open") {
-      window.open(`https://www.facebook.com/`, '_blank');
-    }
-    if (type === "weather-show") {
-      window.open(`https://www.google.com/search?q=weather`, '_blank');
-    }
-    if (type === "github-open") {
-      window.open(`https://github.com/dhirandra7`, '_blank');
+  // Handle backend command result
+  const handleCommand = (data) => {
+    if (!data) {
+      console.warn('No data from assistant')
+      setAiText('Sorry, I encountered an error.')
+      return
     }
 
-    if (type === "linkedin-open") {
-      window.open(`https://www.linkedin.com/in/dhirandra7/`, '_blank');
-    }
+    const { type, userInput, response } = data
+    if (response) setAiText(response)
+    if (response) speak(response)
 
-    if (type === "chatgpt-open") {
-      window.open('https://chat.openai.com/', '_blank');
-    }
+    // handle types
+    if (!type) return
+    const lowerInput = (userInput || '').toLowerCase()
 
+    if (type === 'google-search') window.open(`https://www.google.com/search?q=${encodeURIComponent(lowerInput)}`, '_blank')
+    if (type === 'calculator-open') window.open('https://www.google.com/search?q=calculator', '_blank')
+    if (type === 'instagram-open') window.open('https://www.instagram.com/', '_blank')
+    if (type === 'facebook-open') window.open('https://www.facebook.com/', '_blank')
+    if (type === 'weather-show') window.open('https://www.google.com/search?q=weather', '_blank')
+    if (type === 'github-open') window.open('https://github.com/dhirandra7', '_blank')
+    if (type === 'linkedin-open') window.open('https://www.linkedin.com/in/dhirandra7/', '_blank')
+    if (type === 'chatgpt-open') window.open('https://chat.openai.com/', '_blank')
     if (type === 'open-multiple') {
-      // userInput expected to be comma-separated list like "chatgpt, github, linkedin"
-      const items = (userInput || '').split(',').map(s => s.trim().toLowerCase());
+      const items = (userInput || '').split(',').map(s => s.trim())
       items.forEach(item => {
-        if (!item) return;
-        if (item.includes('chatgpt') || item.includes('chat gpt')) {
-          window.open('https://chat.openai.com/', '_blank');
-        } else if (item.includes('github')) {
-          window.open('https://github.com/dhirandra7', '_blank');
-        } else if (item.includes('linkedin') || item.includes('linked in')) {
-          window.open('https://www.linkedin.com/in/dhirandra7/', '_blank');
-        } else if (item.includes('youtube')) {
-          window.open('https://www.youtube.com/', '_blank');
-        } else if (item.includes('google')) {
-          window.open('https://www.google.com/', '_blank');
-        } else if (item.includes('instagram') || item.includes('insta')) {
-          window.open('https://www.instagram.com/', '_blank');
-        } else if (item.includes('facebook')) {
-          window.open('https://www.facebook.com/', '_blank');
-        } else {
-          // default to google search for unknown item
-          window.open(`https://www.google.com/search?q=${encodeURIComponent(item)}`, '_blank');
-        }
-      });
+        if (!item) return
+        if (/chatgpt|chat gpt/i.test(item)) window.open('https://chat.openai.com/', '_blank')
+        else if (/github/i.test(item)) window.open('https://github.com/dhirandra7', '_blank')
+        else if (/linkedin/i.test(item)) window.open('https://www.linkedin.com/in/dhirandra7/', '_blank')
+        else if (/youtube/i.test(item)) window.open('https://www.youtube.com/', '_blank')
+        else window.open(`https://www.google.com/search?q=${encodeURIComponent(item)}`, '_blank')
+      })
     }
     if (type === 'youtube-search' || type === 'youtube-play' || type === 'youtube-open') {
-      const query = encodeURIComponent(userInput || '');
-      if (userInput && userInput.trim()) {
-        window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
-      } else {
-        window.open('https://www.youtube.com/', '_blank');
-      }
+      const q = encodeURIComponent(userInput || '')
+      if (q) window.open(`https://www.youtube.com/results?search_query=${q}`, '_blank')
+      else window.open('https://www.youtube.com/', '_blank')
     }
   }
 
-useEffect(() => {
-  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const recognition = new SpeechRecognition();
+  // Setup recognition once
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+    if (!SpeechRecognition) {
+      console.warn('SpeechRecognition API not available in this browser')
+      return
+    }
 
-  recognition.continuous = true;
-  recognition.lang = 'en-US';
-  recognition.interimResults = false;
+    const recognition = new SpeechRecognition()
+    recognition.continuous = true
+    recognition.lang = 'en-US'
+    recognition.interimResults = false
 
-  recognitionRef.current = recognition;
+    recognitionRef.current = recognition
 
-  let isMounted = true;  
+    let mounted = true
+    const safeStartTimeout = setTimeout(() => {
+      if (mounted && !isSpeakingRef.current && !isRecognizingRef.current) {
+        try { recognition.start(); console.log('Recognition requested to start') } catch (e) { if (e.name !== 'InvalidStateError') console.error(e) }
+      }
+    }, 1000)
 
-  // Start recognition after 1 second delay only if component still mounted
-  const startTimeout = setTimeout(() => {
-    if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
-      try {
-        recognition.start();
-        console.log("Recognition requested to start");
-      } catch (e) {
-        if (e.name !== "InvalidStateError") {
-          console.error(e);
-        }
+    recognition.onstart = () => { isRecognizingRef.current = true; setListening(true); }
+
+    recognition.onend = () => {
+      isRecognizingRef.current = false
+      setListening(false)
+      // Restart only if not speaking
+      if (mounted && !isSpeakingRef.current) {
+        setTimeout(() => {
+          try { recognition.start(); console.log('Recognition restarted safely') } catch (e) { if (e.name !== 'InvalidStateError') console.error(e) }
+        }, 700)
       }
     }
-  }, 1000);
 
-  recognition.onstart = () => {
-    isRecognizingRef.current = true;
-    setListening(true);
-  };
+    recognition.onerror = (event) => {
+      // handle noisy no-speech separately
+      if (event.error === 'no-speech') {
+        console.warn('No speech detected — waiting for next input')
+        // don't spam restart — allow onend handler to restart
+        return
+      }
+      if (event.error === 'aborted') {
+        isRecognizingRef.current = false
+        setListening(false)
+        return
+      }
 
-  recognition.onend = () => {
-    isRecognizingRef.current = false;
-    setListening(false);
-    if (isMounted && !isSpeakingRef.current) {
-      setTimeout(() => {
-        if (isMounted) {
-          try {
-            recognition.start();
-            console.log("Recognition restarted");
-          } catch (e) {
-            if (e.name !== "InvalidStateError") console.error(e);
-          }
-        }
-      }, 1000);
-    }
-  };
-
-  recognition.onerror = (event) => {
-    // If recognition was aborted intentionally (we call abort() before speaking),
-    // suppress the noisy 'aborted' error — just clear flags and don't restart here.
-    if (event.error === 'aborted') {
-      isRecognizingRef.current = false;
-      setListening(false);
-      return;
-    }
-
-    console.warn("Recognition error:", event.error);
-    isRecognizingRef.current = false;
-    setListening(false);
-    if (isMounted && !isSpeakingRef.current) {
-      setTimeout(() => {
-        if (isMounted) {
-          try {
-            recognition.start();
-            console.log("Recognition restarted after error");
-          } catch (e) {
-            if (e.name !== "InvalidStateError") console.error(e);
-          }
-        }
-      }, 1000);
-    }
-  };
-
-  // NOTE: removed duplicate handleCommand here so the top-level
-  // `handleCommand` (which calls `speak(response)`) is used everywhere.
-
-  recognition.onresult = async (e) => {
-    const transcript = e.results[e.results.length - 1][0].transcript.trim();
-    if (transcript.toLowerCase().includes(userData.assistantName.toLowerCase())) {
-      setAiText("");
-      setUserText(transcript);
-      recognition.stop();
-      isRecognizingRef.current = false;
-      setListening(false);
-      try {
-        console.log('Sending command to backend:', transcript);
-        const data = await getGeminiResponse(transcript);
-        console.log('Backend response:', data);
-        handleCommand(data);
-        // Remove duplicate setAiText here - handleCommand already sets it
-        setUserText("");
-      } catch (error) {
-        console.error('Error getting response:', error);
-        setAiText('Sorry, I encountered an error. Please check the console for details.');
-        isSpeakingRef.current = false;
-        setUserText("");
-        setTimeout(() => startRecognition(), 600);
+      console.warn('Recognition error:', event.error)
+      isRecognizingRef.current = false
+      setListening(false)
+      if (mounted && !isSpeakingRef.current) {
+        setTimeout(() => { try { recognition.start() } catch (e) {} }, 700)
       }
     }
-  };
 
+    recognition.onresult = async (e) => {
+      // take the latest result
+      const last = e.results[e.results.length - 1]
+      const transcript = (last[0] && last[0].transcript) ? last[0].transcript.trim() : ''
+      const text = transcript.toLowerCase()
 
-    const greeting = new SpeechSynthesisUtterance(`Hello ${userData.name}, what can I help you with?`);
-    greeting.lang = 'hi-IN';
-   
-    window.speechSynthesis.speak(greeting);
- 
+      // triggers only when sentence starts with hey alexa or exact phrases
+      const triggers = ['hey alexa', 'hey alexa,', 'hey alexa ' , 'hey alexa.']
+      const matched = triggers.some(t => text.startsWith(t))
+      if (!matched) return // ignore everything else
 
-  return () => {
-    isMounted = false;
-    clearTimeout(startTimeout);
-    recognition.stop();
-    setListening(false);
-    isRecognizingRef.current = false;
-  };
-}, []);
+      // Stop recognition while processing
+      try { recognition.stop() } catch (e) {}
+      isRecognizingRef.current = false
+      setListening(false)
 
+      setAiText('')
+      setUserText(transcript)
 
+      try {
+        console.log('Sending command to backend:', transcript)
+        const data = await getGeminiResponse(transcript)
+        console.log('Backend response:', data)
+        if (!data) {
+          setAiText('Sorry, I encountered an error. Please check the console.')
+          setUserText('')
+          // resume after short delay
+          setTimeout(() => { if (!isSpeakingRef.current) startRecognition() }, 600)
+          return
+        }
+        handleCommand(data)
+        setUserText('')
+      } catch (err) {
+        console.error('Error getting response:', err)
+        setAiText('Sorry, I encountered an error. Please check the console for details.')
+        isSpeakingRef.current = false
+        setUserText('')
+        setTimeout(() => { if (!isSpeakingRef.current) startRecognition() }, 600)
+      }
+    }
 
+    // greeting once on mount if userData present
+    try {
+      if (userData && userData.name) {
+        const greeting = new SpeechSynthesisUtterance(`Hello ${userData.name}, what can I help you with?`)
+        greeting.lang = 'hi-IN'
+        window.speechSynthesis.speak(greeting)
+      }
+    } catch (e) { console.warn('Greeting failed', e) }
+
+    return () => {
+      mounted = false
+      clearTimeout(safeStartTimeout)
+      try { recognition.stop() } catch (e) {}
+      setListening(false)
+      isRecognizingRef.current = false
+    }
+  }, [userData])
 
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
@@ -354,16 +309,14 @@ useEffect(() => {
       <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold absolute hidden lg:block top-[20px] right-[20px]  bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
       <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[100px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
       <div className='w-[300px] h-[400px] flex justify-center items-center overflow-hidden rounded-4xl shadow-lg'>
-<img src={userData?.assistantImage} alt="" className='h-full object-cover'/>
+<img src={userData?.assistantImage} alt="assistant" className='h-full object-cover'/>
       </div>
       <h1 className='text-white text-[18px] font-semibold'>I'm {userData?.assistantName}</h1>
-      {!aiText && <img src={userImg} alt="" className='w-[200px]'/>}
-      {aiText && <img src={aiImg} alt="" className='w-[200px]'/>}
+      {!aiText && <img src={userImg} alt="user" className='w-[200px]'/>}
+      {aiText && <img src={aiImg} alt="ai" className='w-[200px]'/>}
     
     <h1 className='text-white text-[18px] font-semibold text-wrap'>{userText?userText:aiText?aiText:null}</h1>
       
     </div>
   )
 }
-
-export default Home

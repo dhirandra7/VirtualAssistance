@@ -1,56 +1,81 @@
-import React, { useContext, useState } from 'react'
-import bg from "../assets/authBg.png"
-import { IoEye } from "react-icons/io5";
-import { IoEyeOff } from "react-icons/io5";
-import { useNavigate } from 'react-router-dom';
-import { userDataContext } from '../context/UserContext';
-import axios from "axios"
+import React, { useState } from "react";
+import axios from "axios";
+import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
+
 function SignIn() {
-  const [showPassword,setShowPassword]=useState(false)
-  const {serverUrl,userData,setUserData}=useContext(userDataContext)
-  const navigate=useNavigate()
-  const [email,setEmail]=useState("")
-  const [loading,setLoading]=useState(false)
-    const [password,setPassword]=useState("")
-const [err,setErr]=useState("")
-  const handleSignIn=async (e)=>{
-    e.preventDefault()
-    setErr("")
-    setLoading(true)
-try {
-  let result=await axios.post(`${serverUrl}/api/auth/signin`,{
-   email,password
-  },{withCredentials:true} )
- setUserData(result.data)
-  setLoading(false)
-   navigate("/")
-} catch (error) {
-  console.log(error)
-  setUserData(null)
-  setLoading(false)
-  setErr(error.response.data.message)
-}
+  const navigate = useNavigate();
+
+  const [formData, setFormData] = useState({
+    email: "",
+    password: "",
+  });
+
+  // Handle input change
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Handle login submit
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    try {
+      const response = await axios.post(
+        "https://virtualassistance-1-gy7v.onrender.com/api/auth/login",
+        formData,
+        {
+          withCredentials: true,       // <-- IMPORTANT
+        }
+      );
+
+      toast.success("Login successful");
+      navigate("/"); // redirect to home page
+
+      console.log("User logged in:", response.data);
+    } catch (error) {
+      console.error(error);
+      toast.error(
+        error.response?.data?.message || "Login failed, try again!"
+      );
     }
+  };
+
   return (
-    <div className='w-full h-[100vh] bg-cover flex justify-center items-center' style={{backgroundImage:`url(${bg})`}} >
- <form className='w-[90%] h-[600px] max-w-[500px] bg-[#00000062] backdrop-blur shadow-lg shadow-black flex flex-col items-center justify-center gap-[20px] px-[20px]' onSubmit={handleSignIn}>
-<h1 className='text-white text-[30px] font-semibold mb-[30px]'>Sign In to <span className='text-blue-400'>Virtual Assistant</span></h1>
+    <div className="flex justify-center items-center min-h-screen bg-gray-100">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white shadow-lg p-8 rounded-lg w-80"
+      >
+        <h2 className="text-2xl font-bold mb-4 text-center">Sign In</h2>
 
-<input type="email" placeholder='Email' className='w-full h-[60px] outline-none border-2 border-white bg-transparent  text-white placeholder-gray-300 px-[20px] py-[10px] rounded-full text-[18px]' required onChange={(e)=>setEmail(e.target.value)} value={email}/>
-<div className='w-full h-[60px] border-2 border-white bg-transparent  text-white rounded-full text-[18px] relative'>
-<input type={showPassword?"text":"password"} placeholder='password' className='w-full h-full rounded-full outline-none bg-transparent placeholder-gray-300 px-[20px] py-[10px]' required onChange={(e)=>setPassword(e.target.value)} value={password}/>
-{!showPassword && <IoEye className='absolute top-[18px] right-[20px] w-[25px] h-[25px] text-[white] cursor-pointer' onClick={()=>setShowPassword(true)}/>}
-  {showPassword && <IoEyeOff className='absolute top-[18px] right-[20px] w-[25px] h-[25px] text-[white] cursor-pointer' onClick={()=>setShowPassword(false)}/>}
-</div>
-{err.length>0 && <p className='text-red-500 text-[17px]'>
-  *{err}
-  </p>}
-<button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white rounded-full text-[19px] ' disabled={loading}>{loading?"Loading...":"Sign In"}</button>
+        <input
+          type="email"
+          name="email"
+          onChange={handleChange}
+          className="w-full p-2 border rounded mb-3"
+          placeholder="Email"
+          required
+        />
 
-<p className='text-[white] text-[18px] cursor-pointer' onClick={()=>navigate("/signup")}>Want to create a new account ? <span className='text-blue-400'>Sign Up</span></p>
- </form>
+        <input
+          type="password"
+          name="password"
+          onChange={handleChange}
+          className="w-full p-2 border rounded mb-3"
+          placeholder="Password"
+          required
+        />
+
+        <button
+          type="submit"
+          className="bg-blue-600 text-white w-full p-2 rounded hover:bg-blue-700"
+        >
+          Login
+        </button>
+      </form>
     </div>
-  )
+  );
 }
 
-export default SignIn
+export default SignIn;
