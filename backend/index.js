@@ -15,7 +15,7 @@ connectDb();
 
 // CORS FIX
 app.use(cors({
-    origin: "https://virtualassistance-dnyq.onrender.com",  // ✔️ Correct FRONTEND URL
+    origin: "https://virtualassistance-1-gy7v.onrender.com",  // ✔️ Correct FRONTEND URL
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE"]
 }));
