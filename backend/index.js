@@ -10,13 +10,14 @@ import geminiResponse from "./gemini.js";
 
 const app = express();
 
-// Connect to MongoDB first
+// Connect Mongo
 connectDb();
 
-// Enable CORS for your frontend Render URL
+// CORS FIX
 app.use(cors({
-    origin: "https://virtualassistance-1-gy7v.onrender.com", //  live frontend URL
-    credentials: true
+    origin: "https://virtualassistance-dnyq.onrender.com",  // ✔️ Correct FRONTEND URL
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 
 app.use(express.json());
@@ -26,7 +27,6 @@ app.use(cookieParser());
 app.use("/api/auth", authRouter);
 app.use("/api/user", userRouter);
 
-// Start server
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
     console.log(`Server started on port ${port}`);
