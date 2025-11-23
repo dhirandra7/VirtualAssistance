@@ -1,81 +1,62 @@
 import React, { useState } from "react";
-import axios from "axios";
-import { toast } from "react-toastify";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom"; // if you are using react-router
 
-function SignIn() {
+const Signin = () => {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  // Handle input change
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  // Handle login submit
-  const handleSubmit = async (e) => {
+  const handleSignin = async (e) => {
     e.preventDefault();
-
     try {
-      const response = await axios.post(
-        "https://virtualassistance-1-gy7v.onrender.com/api/auth/login",
-        formData,
-        {
-          withCredentials: true,       // <-- IMPORTANT
-        }
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      toast.success("Login successful");
-      navigate("/"); // redirect to home page
-
-      console.log("User logged in:", response.data);
-    } catch (error) {
-      console.error(error);
-      toast.error(
-        error.response?.data?.message || "Login failed, try again!"
-      );
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem("token", data.token); // save token
+        setMessage("Login successful!");
+        navigate("/dashboard"); // redirect after login
+      } else {
+        setMessage(data.message || "Login failed");
+      }
+    } catch (err) {
+      setMessage("Error connecting to server");
+      console.error(err);
     }
   };
 
   return (
-    <div className="flex justify-center items-center min-h-screen bg-gray-100">
-      <form
-        onSubmit={handleSubmit}
-        className="bg-white shadow-lg p-8 rounded-lg w-80"
-      >
-        <h2 className="text-2xl font-bold mb-4 text-center">Sign In</h2>
-
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <h2 className="text-2xl mb-4">Login</h2>
+      <form onSubmit={handleSignin} className="flex flex-col w-80 gap-3">
         <input
           type="email"
-          name="email"
-          onChange={handleChange}
-          className="w-full p-2 border rounded mb-3"
           placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           required
+          className="p-2 border rounded"
         />
-
         <input
           type="password"
-          name="password"
-          onChange={handleChange}
-          className="w-full p-2 border rounded mb-3"
           placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
           required
+          className="p-2 border rounded"
         />
-
-        <button
-          type="submit"
-          className="bg-blue-600 text-white w-full p-2 rounded hover:bg-blue-700"
-        >
+        <button type="submit" className="p-2 bg-green-500 text-white rounded">
           Login
         </button>
       </form>
+      {message && <p className="mt-4 text-red-500">{message}</p>}
     </div>
   );
-}
+};
 
-export default SignIn;
+export default Signin;

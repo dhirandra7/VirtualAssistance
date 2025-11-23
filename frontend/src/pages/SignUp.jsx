@@ -1,127 +1,60 @@
-import React, { useContext, useState } from 'react';
-import bg from "../assets/authBg.png";
-import { IoEye, IoEyeOff } from "react-icons/io5";
-import { useNavigate } from 'react-router-dom';
-import { userDataContext } from '../context/UserContext';
-import axios from "axios";
+import React, { useState } from "react";
 
-function SignUp() {
-
-  const [showPassword, setShowPassword] = useState(false);
-  const { serverUrl, setUserData } = useContext(userDataContext);
-  const navigate = useNavigate();
-
-  const [name, setName] = useState("");
+const Signup = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
 
-  const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-
-  const handleSignUp = async (e) => {
+  const handleSignup = async (e) => {
     e.preventDefault();
-    setErr("");
-    setLoading(true);
-
     try {
-      let result = await axios.post(
-        `${serverUrl}/api/auth/signup`,
-        { name, email, password },
-        { withCredentials: true }
-      );
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signup`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
 
-      setUserData(result.data);
-      setLoading(false);
-
-      navigate("/customize");
-
-    } catch (error) {
-      console.log(error);
-      setUserData(null);
-      setLoading(false);
-
-      if (error.response?.data?.message) {
-        setErr(error.response.data.message);
+      const data = await res.json();
+      if (res.ok) {
+        setMessage("Signup successful! Please login.");
+        setEmail("");
+        setPassword("");
       } else {
-        setErr("Signup failed. Please try again.");
+        setMessage(data.message || "Signup failed");
       }
+    } catch (err) {
+      setMessage("Error connecting to server");
+      console.error(err);
     }
   };
 
   return (
-    <div
-      className="w-full h-[100vh] bg-cover flex justify-center items-center"
-      style={{ backgroundImage: `url(${bg})` }}
-    >
-      <form
-        className="w-[90%] h-[600px] max-w-[500px] bg-[#00000062] backdrop-blur shadow-lg shadow-black flex flex-col items-center justify-center gap-[20px] px-[20px]"
-        onSubmit={handleSignUp}
-      >
-        <h1 className="text-white text-[30px] font-semibold mb-[30px]">
-          Register to <span className="text-blue-400">Virtual Assistant</span>
-        </h1>
-
-        <input
-          type="text"
-          placeholder="Enter your Name"
-          className="w-full h-[60px] outline-none border-2 border-white bg-transparent text-white placeholder-gray-300 px-[20px] rounded-full text-[18px]"
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
+    <div className="flex flex-col items-center justify-center min-h-screen p-4">
+      <h2 className="text-2xl mb-4">Signup</h2>
+      <form onSubmit={handleSignup} className="flex flex-col w-80 gap-3">
         <input
           type="email"
           placeholder="Email"
-          className="w-full h-[60px] outline-none border-2 border-white bg-transparent text-white placeholder-gray-300 px-[20px] rounded-full text-[18px]"
-          required
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          required
+          className="p-2 border rounded"
         />
-
-        <div className="w-full h-[60px] border-2 border-white bg-transparent text-white rounded-full text-[18px] relative">
-          <input
-            type={showPassword ? "text" : "password"}
-            placeholder="Password"
-            className="w-full h-full rounded-full outline-none bg-transparent placeholder-gray-300 px-[20px]"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-
-          {!showPassword ? (
-            <IoEye
-              className="absolute top-[18px] right-[20px] w-[25px] h-[25px] text-white cursor-pointer"
-              onClick={() => setShowPassword(true)}
-            />
-          ) : (
-            <IoEyeOff
-              className="absolute top-[18px] right-[20px] w-[25px] h-[25px] text-white cursor-pointer"
-              onClick={() => setShowPassword(false)}
-            />
-          )}
-        </div>
-
-        {err && (
-          <p className="text-red-500 text-[17px]">*{err}</p>
-        )}
-
-        <button
-          disabled={loading}
-          className="min-w-[150px] h-[60px] mt-[30px] text-black font-semibold bg-white rounded-full text-[19px]"
-        >
-          {loading ? "Loading..." : "Sign Up"}
+        <input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          className="p-2 border rounded"
+        />
+        <button type="submit" className="p-2 bg-blue-500 text-white rounded">
+          Signup
         </button>
-
-        <p
-          className="text-white text-[18px] cursor-pointer"
-          onClick={() => navigate("/signin")}
-        >
-          Already have an account? <span className="text-blue-400">Sign In</span>
-        </p>
       </form>
+      {message && <p className="mt-4 text-red-500">{message}</p>}
     </div>
   );
-}
+};
 
-export default SignUp;
+export default Signup;
