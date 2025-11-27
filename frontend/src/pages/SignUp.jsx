@@ -1,22 +1,26 @@
 import React, { useState } from "react";
 
 const Signup = () => {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [name, setName] = useState("");        // Name state
+  const [email, setEmail] = useState("");      // Email state
+  const [password, setPassword] = useState(""); // Password state
+  const [message, setMessage] = useState(""); // For success/error messages
 
   const handleSignup = async (e) => {
     e.preventDefault();
+
     try {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ name, email, password }) // Send name, email, password
       });
 
       const data = await res.json();
+
       if (res.ok) {
         setMessage("Signup successful! Please login.");
+        setName("");
         setEmail("");
         setPassword("");
       } else {
@@ -32,6 +36,14 @@ const Signup = () => {
     <div className="flex flex-col items-center justify-center min-h-screen p-4">
       <h2 className="text-2xl mb-4">Signup</h2>
       <form onSubmit={handleSignup} className="flex flex-col w-80 gap-3">
+        <input
+          type="text"
+          placeholder="Name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+          className="p-2 border rounded"
+        />
         <input
           type="email"
           placeholder="Email"

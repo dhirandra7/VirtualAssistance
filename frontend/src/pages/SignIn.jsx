@@ -12,6 +12,7 @@ const Signin = () => {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
+        credentials: "include", // ✅ Include cookies from backend
       });
 
       const data = await res.json();
@@ -19,6 +20,8 @@ const Signin = () => {
         setMessage("Login successful!");
         setEmail("");
         setPassword("");
+        // Optionally redirect here
+        // window.location.href = "/dashboard";
       } else {
         setMessage(data.message || "Login failed");
       }
