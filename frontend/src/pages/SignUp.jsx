@@ -1,10 +1,10 @@
 import React, { useState } from "react";
 
 const Signup = () => {
-  const [name, setName] = useState("");        // Name state
-  const [email, setEmail] = useState("");      // Email state
-  const [password, setPassword] = useState(""); // Password state
-  const [message, setMessage] = useState(""); // For success/error messages
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [message, setMessage] = useState("");
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -13,16 +13,23 @@ const Signup = () => {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }) // Send name, email, password
+        body: JSON.stringify({ name, email, password }),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        setMessage("Signup successful! Please login.");
+        setMessage("Signup successful! Redirecting to login...");
+
+        // Clear input fields
         setName("");
         setEmail("");
         setPassword("");
+
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          window.location.href = "/signin"; // login route
+        }, 2000);
       } else {
         setMessage(data.message || "Signup failed");
       }
