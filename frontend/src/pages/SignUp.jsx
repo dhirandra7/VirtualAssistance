@@ -1,10 +1,12 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [message, setMessage] = useState("");
+  const [name, setName] = useState("");        
+  const [email, setEmail] = useState("");      
+  const [password, setPassword] = useState(""); 
+  const [message, setMessage] = useState(""); 
+  const navigate = useNavigate(); // For redirect
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -13,23 +15,22 @@ const Signup = () => {
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password }),
+        body: JSON.stringify({ name, email, password })
       });
 
       const data = await res.json();
 
       if (res.ok) {
         setMessage("Signup successful! Redirecting to login...");
-
-        // Clear input fields
         setName("");
         setEmail("");
         setPassword("");
 
-        // Redirect to login page after 2 seconds
+        // Redirect after 1 second
         setTimeout(() => {
-          window.location.href = "/signin"; // login route
-        }, 2000);
+          navigate("/signin");
+        }, 1000);
+
       } else {
         setMessage(data.message || "Signup failed");
       }

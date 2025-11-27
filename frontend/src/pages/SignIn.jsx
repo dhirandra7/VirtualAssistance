@@ -1,27 +1,31 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Signin = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
+  const navigate = useNavigate(); // For redirect
 
   const handleSignin = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/signin`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
-        credentials: "include", // ✅ Include cookies from backend
       });
 
       const data = await res.json();
       if (res.ok) {
-        setMessage("Login successful!");
+        setMessage("Login successful! Redirecting...");
         setEmail("");
         setPassword("");
-        // Optionally redirect here
-        // window.location.href = "/dashboard";
+
+        // Redirect to dashboard/home page after login
+        setTimeout(() => {
+          navigate("/dashboard"); // Change "/dashboard" to your desired route
+        }, 1000);
       } else {
         setMessage(data.message || "Login failed");
       }
