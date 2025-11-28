@@ -21,7 +21,6 @@ export default function Home() {
   const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
   const voicesRef = useRef([])
   const hasGreetedRef = useRef(false)
-
   const assistantName = (userData && userData.assistantName) ? userData.assistantName.toLowerCase() : 'alexa'
 
   const handleLogOut = async () => {
@@ -38,25 +37,14 @@ export default function Home() {
 
   const startRecognition = () => {
     const r = recognitionRef.current
-    if (!r) return
-    if (!isSpeakingRef.current && !isRecognizingRef.current) {
-      try {
-        r.start()
-        console.log('Recognition requested to start')
-      } catch (e) {
-        if (e.name !== 'InvalidStateError') console.error('Start error:', e)
-      }
-    }
+    if (!r || isRecognizingRef.current || isSpeakingRef.current) return
+    try { r.start(); console.log('Recognition requested to start') } catch(e) { if(e.name !== 'InvalidStateError') console.error(e) }
   }
 
   // Load voices
   useEffect(() => {
     const loadVoices = () => {
-      try {
-        voicesRef.current = (synth && synth.getVoices()) || []
-      } catch (e) {
-        voicesRef.current = []
-      }
+      try { voicesRef.current = (synth && synth.getVoices()) || [] } catch(e) { voicesRef.current = [] }
     }
     loadVoices()
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -70,18 +58,17 @@ export default function Home() {
     if (!synth) return
     if (synth.speaking) synth.cancel()
 
+    if (isRecognizingRef.current) {
+      try { recognitionRef.current.stop() } catch {}
+      isRecognizingRef.current = false
+      setListening(false)
+    }
+
     if (!voicesRef.current || voicesRef.current.length === 0) {
       await new Promise((resolve) => {
-        const handler = () => {
-          voicesRef.current = synth.getVoices() || []
-          resolve()
-        }
+        const handler = () => { voicesRef.current = synth.getVoices() || []; resolve() }
         window.speechSynthesis.addEventListener('voiceschanged', handler)
-        setTimeout(() => {
-          window.speechSynthesis.removeEventListener('voiceschanged', handler)
-          voicesRef.current = synth.getVoices() || []
-          resolve()
-        }, 500)
+        setTimeout(() => { window.speechSynthesis.removeEventListener('voiceschanged', handler); voicesRef.current = synth.getVoices() || []; resolve() }, 500)
       })
     }
 
@@ -101,7 +88,6 @@ export default function Home() {
     utter.rate = 0.95
     utter.pitch = 1
     utter.volume = 1
-
     isSpeakingRef.current = true
 
     utter.onstart = () => console.log('Speech started')
@@ -109,40 +95,37 @@ export default function Home() {
       console.log('Speech ended')
       isSpeakingRef.current = false
       setAiText("")
-      setTimeout(() => startRecognition(), 600)
+      setTimeout(() => startRecognition(), 500) // restart recognition only after TTS ends
     }
 
     utter.onerror = (e) => {
+      if (e.error === 'interrupted') {
+        console.warn('Speech interrupted, ignoring...')
+        isSpeakingRef.current = false
+        setTimeout(() => startRecognition(), 500)
+        return
+      }
       console.error('Speech error', e)
       isSpeakingRef.current = false
-      setTimeout(() => startRecognition(), 600)
+      setTimeout(() => startRecognition(), 500)
     }
 
     synth.speak(utter)
   }
 
   const handleCommand = (data) => {
-    if (!data) {
-      setAiText('Sorry, I encountered an error.')
-      return
-    }
+    if (!data) { setAiText('Sorry, I encountered an error.'); return }
 
     const { type, userInput, response } = data
-    if (response) {
-      setAiText(response)
-      speak(response)
-    }
+    if (response) { setAiText(response); speak(response) }
 
     if (!type) return
-
     const lowerInput = (userInput || '').toLowerCase()
 
     if (type === 'google-search') window.open(`https://www.google.com/search?q=${encodeURIComponent(lowerInput)}`, '_blank')
     if (type === 'youtube-open' || type === 'youtube-play' || type === 'youtube-search') {
       const items = lowerInput.split(/,|and/).map(i => i.trim())
-      items.forEach(q => {
-        if (q) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank')
-      })
+      items.forEach(q => { if(q) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank') })
     }
     if (type === 'open-multiple') {
       const items = (userInput || '').split(/,|and/).map(s => s.trim())
@@ -167,18 +150,20 @@ export default function Home() {
     recognition.lang = 'en-US'
     recognition.interimResults = false
     recognitionRef.current = recognition
-
     let mounted = true
 
     recognition.onstart = () => { isRecognizingRef.current = true; setListening(true) }
-    recognition.onend = () => { isRecognizingRef.current = false; setListening(false); if (mounted && !isSpeakingRef.current) setTimeout(() => recognition.start(), 700) }
-    recognition.onerror = (event) => { isRecognizingRef.current = false; setListening(false); }
+    recognition.onend = () => {
+      isRecognizingRef.current = false
+      setListening(false)
+      if (mounted && !isSpeakingRef.current) setTimeout(() => recognition.start(), 700)
+    }
+    recognition.onerror = () => { isRecognizingRef.current = false; setListening(false) }
 
     recognition.onresult = async (e) => {
       const last = e.results[e.results.length - 1]
       const transcript = (last[0] && last[0].transcript) ? last[0].transcript.trim() : ''
       const text = transcript.toLowerCase()
-
       if (!text.includes(assistantName)) return
 
       try { recognition.stop() } catch {}
