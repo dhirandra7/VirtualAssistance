@@ -6,7 +6,7 @@ const authRouter = express.Router();
 // Signup
 authRouter.post("/signup", signUp);
 
-// Login (changed from /signin to /login to match frontend)
+// Login
 authRouter.post("/login", Login);
 
 // Logout

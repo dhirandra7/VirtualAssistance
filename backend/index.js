@@ -9,21 +9,13 @@ import cookieParser from "cookie-parser";
 
 const app = express();
 
-// Connect Mongo
+// Connect MongoDB
 connectDb();
 
-// 🔥 CORRECT CORS FOR RENDER + COOKIES
+// CORS (Correct for Render)
 app.use(cors({
-    origin: "https://virtualassistance-1-gy7v.onrender.com",  // your frontend URL
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-// Required for preflight OPTIONS on Render
-app.options("*", cors({
-    origin: "https://virtualassistance-1-gy7v.onrender.com",
-    credentials: true
+  origin: "https://virtualassistance-1-gy7v.onrender.com",
+  credentials: true,
 }));
 
 app.use(express.json());
@@ -35,10 +27,11 @@ app.use("/api/user", userRouter);
 
 // Test route
 app.get("/", (req, res) => {
-    res.send("Backend running successfully!");
+  res.send("Backend running successfully!");
 });
 
+// Start server
 const port = process.env.PORT || 5000;
 app.listen(port, () => {
-    console.log(`Server started on port ${port}`);
+  console.log("Server running on port", port);
 });
