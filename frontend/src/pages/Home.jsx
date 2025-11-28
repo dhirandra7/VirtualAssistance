@@ -3,9 +3,9 @@ import { userDataContext } from '../context/UserContext'
 import { useNavigate } from 'react-router-dom'
 import axios from 'axios'
 import aiImg from "../assets/ai.gif"
+import { CgMenuRight } from "react-icons/cg";
+import { RxCross1 } from "react-icons/rx";
 import userImg from "../assets/user.gif"
-import { CgMenuRight } from "react-icons/cg"
-import { RxCross1 } from "react-icons/rx"
 
 export default function Home() {
   const { userData, serverUrl, setUserData, getGeminiResponse } = useContext(userDataContext)
@@ -14,17 +14,15 @@ export default function Home() {
   const [listening, setListening] = useState(false)
   const [userText, setUserText] = useState("")
   const [aiText, setAiText] = useState("")
-  const [ham, setHam] = useState(false)
-
-  const recognitionRef = useRef(null)
-  const isRecognizingRef = useRef(false)
   const isSpeakingRef = useRef(false)
+  const recognitionRef = useRef(null)
+  const [ham, setHam] = useState(false)
+  const isRecognizingRef = useRef(false)
+  const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
   const voicesRef = useRef([])
   const hasGreetedRef = useRef(false)
-  const synth = typeof window !== 'undefined' ? window.speechSynthesis : null
 
   const assistantName = (userData?.assistantName || 'alexa').toLowerCase()
-
 
   const handleLogOut = async () => {
     try {
@@ -38,50 +36,57 @@ export default function Home() {
     }
   }
 
-  
-  const safeStartRecognition = () => {
+  const startRecognition = () => {
     const r = recognitionRef.current
-    if (r && !isRecognizingRef.current) {
+    if (!r) return
+    if (!isSpeakingRef.current && !isRecognizingRef.current) {
       try {
         r.start()
-        console.log("Recognition requested to start")
+        console.log('Recognition requested to start')
       } catch (e) {
-        if (e.name !== 'InvalidStateError') console.error(e)
+        if (e.name !== 'InvalidStateError') console.error('Start error:', e)
       }
     }
   }
 
+  const safeStartRecognition = () => {
+    setTimeout(() => startRecognition(), 600)
+  }
 
+  // Load voices
   useEffect(() => {
     const loadVoices = () => {
-      voicesRef.current = synth?.getVoices() || []
+      voicesRef.current = (synth && synth.getVoices()) || []
     }
     loadVoices()
-    if (window.speechSynthesis) {
+    if (window?.speechSynthesis) {
       const handler = () => loadVoices()
       window.speechSynthesis.addEventListener('voiceschanged', handler)
       return () => window.speechSynthesis.removeEventListener('voiceschanged', handler)
     }
   }, [synth])
 
-  
+  // Speak helper with safe queue
   const speak = async (text) => {
-    if (!synth) return
-    if (synth.speaking) {
-      console.log("Speech interrupted, ignoring...")
-      synth.cancel()
+    if (!synth || !text) return
+
+    // Prevent interrupting ongoing speech
+    if (isSpeakingRef.current) {
+      console.log("Already speaking, ignoring:", text)
+      return
     }
 
     const utter = new SpeechSynthesisUtterance(text)
-    const isHindi = /[\u0900-\u097F]/.test(text)
+
+    const isHindi = /[\u0900-\u097F]/.test(text) || /\b(kya|tum|aap|kaise|kaisa|baje|namaste|shukriya|dhanyavaad)\b/i.test(text)
     utter.lang = isHindi ? 'hi-IN' : 'en-US'
 
-    const voices = voicesRef.current
+    const voices = voicesRef.current || []
     if (isHindi) {
-      const v = voices.find(vv => vv.lang.startsWith('hi'))
+      const v = voices.find(vv => vv.lang?.startsWith('hi'))
       if (v) utter.voice = v
     } else {
-      const v = voices.find(vv => vv.lang.startsWith('en'))
+      const v = voices.find(vv => vv.lang?.startsWith('en'))
       if (v) utter.voice = v
     }
 
@@ -90,28 +95,25 @@ export default function Home() {
     utter.volume = 1
 
     isSpeakingRef.current = true
-
     utter.onstart = () => console.log('Speech started')
     utter.onend = () => {
       console.log('Speech ended')
       isSpeakingRef.current = false
       setAiText("")
-      setTimeout(safeStartRecognition, 600)
+      safeStartRecognition()
     }
-
     utter.onerror = (e) => {
-      console.warn("Speech synthesis error (ignored):", e.error)
+      console.warn('Speech synthesis error (ignored):', e.error)
       isSpeakingRef.current = false
-      setTimeout(safeStartRecognition, 600)
+      safeStartRecognition()
     }
 
     synth.speak(utter)
   }
 
-  
   const handleCommand = (data) => {
     if (!data) {
-      setAiText("Sorry, I encountered an error.")
+      setAiText('Sorry, I encountered an error.')
       return
     }
 
@@ -122,19 +124,13 @@ export default function Home() {
     }
 
     if (!type) return
-
     const lowerInput = (userInput || '').toLowerCase()
 
-    if (type === 'google-search')
-      window.open(`https://www.google.com/search?q=${encodeURIComponent(lowerInput)}`, '_blank')
-
+    if (type === 'google-search') window.open(`https://www.google.com/search?q=${encodeURIComponent(lowerInput)}`, '_blank')
     if (type === 'youtube-open' || type === 'youtube-play' || type === 'youtube-search') {
       const items = lowerInput.split(/,|and/).map(i => i.trim())
-      items.forEach(q => {
-        if (q) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank')
-      })
+      items.forEach(q => { if (q) window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`, '_blank') })
     }
-
     if (type === 'open-multiple') {
       const items = (userInput || '').split(/,|and/).map(s => s.trim())
       items.forEach(item => {
@@ -148,9 +144,8 @@ export default function Home() {
     }
   }
 
-  
   useEffect(() => {
-    if (!window) return
+    if (typeof window === 'undefined') return
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) return
 
@@ -166,12 +161,12 @@ export default function Home() {
     recognition.onend = () => {
       isRecognizingRef.current = false
       setListening(false)
-      if (mounted && !isSpeakingRef.current) setTimeout(safeStartRecognition, 700)
+      if (mounted && !isSpeakingRef.current) safeStartRecognition()
     }
-    recognition.onerror = (event) => {
-      console.warn("Recognition error (ignored):", event.error)
+    recognition.onerror = (event) => { 
       isRecognizingRef.current = false
       setListening(false)
+      console.warn('Recognition error:', event.error)
     }
 
     recognition.onresult = async (e) => {
@@ -184,7 +179,6 @@ export default function Home() {
       try { recognition.stop() } catch {}
       isRecognizingRef.current = false
       setListening(false)
-
       setUserText(transcript)
       setAiText("")
 
@@ -199,43 +193,40 @@ export default function Home() {
       }
     }
 
+    // Greet once
     if (userData?.name && !hasGreetedRef.current) {
       hasGreetedRef.current = true
       speak(`Hello ${userData.name}, what can I help you with?`)
     }
 
-    setTimeout(safeStartRecognition, 1000)
+    setTimeout(() => startRecognition(), 1000)
 
     return () => {
       mounted = false
       try { recognition.stop() } catch {}
-      isRecognizingRef.current = false
       setListening(false)
+      isRecognizingRef.current = false
     }
   }, [userData])
 
-  
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
       <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(true)}/>
       <div className={`absolute lg:hidden top-0 w-full h-full bg-[#00000053] backdrop-blur-lg p-[20px] flex flex-col gap-[20px] items-start ${ham?"translate-x-0":"translate-x-full"} transition-transform`}>
-        <RxCross1 className='text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(false)}/>
-        <button className='min-w-[150px] h-[60px] text-black font-semibold bg-white rounded-full cursor-pointer text-[19px]' onClick={handleLogOut}>Log Out</button>
-        <button className='min-w-[150px] h-[60px] text-black font-semibold bg-white rounded-full cursor-pointer text-[19px] px-[20px] py-[10px]' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
+        <RxCross1 className=' text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(false)}/>
+        <button className='min-w-[150px] h-[60px]  text-black font-semibold   bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
+        <button className='min-w-[150px] h-[60px]  text-black font-semibold  bg-white  rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] ' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
         <div className='w-full h-[2px] bg-gray-400'></div>
         <h1 className='text-white font-semibold text-[19px]'>History</h1>
         <div className='w-full h-[400px] gap-[20px] overflow-y-auto flex flex-col truncate'>
-          {userData?.history?.map(his => <div key={his} className='text-gray-200 text-[18px] w-full h-[30px]'>{his}</div>)}
+          {userData.history?.map((his)=>(<div key={his} className='text-gray-200 text-[18px] w-full h-[30px]'>{his}</div>))}
         </div>
       </div>
-
-      <button className='min-w-[150px] h-[60px] text-black font-semibold absolute hidden lg:block top-[20px] right-[20px] bg-white rounded-full cursor-pointer text-[19px]' onClick={handleLogOut}>Log Out</button>
-      <button className='min-w-[150px] h-[60px] text-black font-semibold absolute hidden lg:block top-[100px] right-[20px] bg-white rounded-full cursor-pointer text-[19px] px-[20px] py-[10px]' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
-
+      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold absolute hidden lg:block top-[20px] right-[20px]  bg-white rounded-full cursor-pointer text-[19px] ' onClick={handleLogOut}>Log Out</button>
+      <button className='min-w-[150px] h-[60px] mt-[30px] text-black font-semibold  bg-white absolute top-[100px] right-[20px] rounded-full cursor-pointer text-[19px] px-[20px] py-[10px] hidden lg:block ' onClick={()=>navigate("/customize")}>Customize your Assistant</button>
       <div className='w-[300px] h-[400px] flex justify-center items-center overflow-hidden rounded-4xl shadow-lg'>
         <img src={userData?.assistantImage} alt="assistant" className='h-full object-cover'/>
       </div>
-
       <h1 className='text-white text-[18px] font-semibold'>I'm {userData?.assistantName}</h1>
       {!aiText && <img src={userImg} alt="user" className='w-[200px]'/>}
       {aiText && <img src={aiImg} alt="ai" className='w-[200px]'/>}
