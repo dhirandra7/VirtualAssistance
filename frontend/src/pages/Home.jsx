@@ -25,7 +25,7 @@ export default function Home() {
 
   const assistantName = (userData?.assistantName || 'alexa').toLowerCase()
 
-  // ================= Logout =================
+
   const handleLogOut = async () => {
     try {
       await axios.get(`${serverUrl}/api/auth/logout`, { withCredentials: true })
@@ -38,7 +38,7 @@ export default function Home() {
     }
   }
 
-  // ================= Safe Recognition Start =================
+  
   const safeStartRecognition = () => {
     const r = recognitionRef.current
     if (r && !isRecognizingRef.current) {
@@ -51,7 +51,7 @@ export default function Home() {
     }
   }
 
-  // ================= Load Voices =================
+
   useEffect(() => {
     const loadVoices = () => {
       voicesRef.current = synth?.getVoices() || []
@@ -64,7 +64,7 @@ export default function Home() {
     }
   }, [synth])
 
-  // ================= Speak Helper =================
+  
   const speak = async (text) => {
     if (!synth) return
     if (synth.speaking) {
@@ -108,7 +108,7 @@ export default function Home() {
     synth.speak(utter)
   }
 
-  // ================= Handle Commands =================
+  
   const handleCommand = (data) => {
     if (!data) {
       setAiText("Sorry, I encountered an error.")
@@ -148,7 +148,7 @@ export default function Home() {
     }
   }
 
-  // ================= Setup Recognition =================
+  
   useEffect(() => {
     if (!window) return
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -214,7 +214,7 @@ export default function Home() {
     }
   }, [userData])
 
-  // ================= Render =================
+  
   return (
     <div className='w-full h-[100vh] bg-gradient-to-t from-[black] to-[#02023d] flex justify-center items-center flex-col gap-[15px] overflow-hidden'>
       <CgMenuRight className='lg:hidden text-white absolute top-[20px] right-[20px] w-[25px] h-[25px]' onClick={()=>setHam(true)}/>
